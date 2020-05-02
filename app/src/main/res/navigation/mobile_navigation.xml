@@ -43,8 +43,16 @@
     </fragment>
 
     <fragment
-        android:id="@+id/nav_slideshow"
-        android:name="com.example.androideatitv2_serverapp.ui.slideshow.SlideshowFragment"
-        android:label="@string/menu_slideshow"
-        tools:layout="@layout/fragment_slideshow" />
+        android:id="@+id/nav_order"
+        android:name="com.example.androideatitv2_serverapp.ui.order.OrderFragment"
+        android:label="@string/menu_order"
+        tools:layout="@layout/fragment_order" >
+
+        <action android:id="@+id/clearBackStack"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/nav_category"
+            app:popUpToInclusive="true"/>
+
+
+    </fragment>
 </navigation>

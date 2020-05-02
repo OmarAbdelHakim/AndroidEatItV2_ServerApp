@@ -10,9 +10,11 @@
 
     <string name="menu_category">Categories</string>
     <string name="menu_food_list">Food List</string>
-    <string name="menu_slideshow">Slideshow</string>
+    <string name="menu_order">Orders</string>
+    <string name="menu_sign_out">Sign out</string>
 
     <string name="home_second">Home Second</string>
     <string name="popular_categories">Popular Categories</string>
     <string name="action_search">Search</string>
+    <string name="action_filter">Filter</string>
 </resources>

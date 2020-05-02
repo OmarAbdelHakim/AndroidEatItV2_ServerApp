@@ -1,18 +1,28 @@
 package com.example.androideatitv2_serverapp;
 
+import android.content.DialogInterface;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.example.androideatitv2_serverapp.Model.EventBus.ChangeMenuClick;
 import com.example.androideatitv2_serverapp.Model.EventBus.ToastEvent;
 import com.example.androideatitv2_serverapp.Model.EventBus.categoryClick;
+import com.example.androideatitv2_serverapp.common.common;
 import com.google.android.material.navigation.NavigationView;
+import com.google.firebase.auth.FirebaseAuth;
 
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.core.view.GravityCompat;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 import androidx.navigation.ui.AppBarConfiguration;
@@ -41,18 +51,94 @@ public class HomeActivity extends AppCompatActivity {
         // Passing each menu ID as a set of Ids because each
         // menu should be considered as top level destinations.
         mAppBarConfiguration = new AppBarConfiguration.Builder(
-                R.id.nav_category, R.id.nav_food_list, R.id.nav_slideshow)
+                R.id.nav_category, R.id.nav_food_list, R.id.nav_order)
                 .setDrawerLayout(drawer)
                 .build();
         navController = Navigation.findNavController(this, R.id.nav_host_fragment);
         NavigationUI.setupActionBarWithNavController(this, navController, mAppBarConfiguration);
         NavigationUI.setupWithNavController(navigationView, navController);
+
+        navigationView.setNavigationItemSelectedListener(new NavigationView.OnNavigationItemSelectedListener() {
+            @Override
+            public boolean onNavigationItemSelected(@NonNull MenuItem menuItem) {
+
+                //it's possible to do more actions on several items, if there is a large amount of items I prefer switch(){case} instead of if()
+
+              /* if (id==R.id.nav_sign_out){
+                  signOut();
+               }*/
+                switch (menuItem.getItemId())
+                {
+                    case R.id.nav_category:
+                        if(menuItem.getItemId() != menuClick)
+                            navController.navigate(R.id.nav_category);
+                        break;
+
+                    case R.id.nav_order:
+                       if(menuItem.getItemId() != menuClick)
+                           navController.navigate(R.id.nav_order);
+                        break;
+                    case R.id.nav_sign_out:
+                            signOut();
+                        break;
+                    default:
+                            menuClick = -1;
+                            break;
+                }
+
+                NavigationUI.onNavDestinationSelected(menuItem,navController);
+                //This is for closing the drawer after acting on it
+                drawer.closeDrawer(GravityCompat.START);
+
+                menuClick = menuItem.getItemId();
+
+                return true;
+            }
+        });
+        navigationView.bringToFront();
+            // heta dy bta3t al name al byzaher fe  navigationbar
+        View headerView = navigationView.getHeaderView(0);
+        TextView txt_user = (TextView)headerView.findViewById(R.id.txt_user);
+        common.setSpanString("Hey " , common.currentServerUser.getName(),txt_user);
+
     }
+
+    private void signOut() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Sign out")
+                .setMessage("Do you really want sign out ?")
+                .setNegativeButton("CANCEL", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+
+                        dialogInterface.dismiss();
+
+                    }
+                }).setPositiveButton("OK", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+
+                common.selectedFood = null;
+                common.categorySelected = null;
+                common.currentServerUser = null;
+                FirebaseAuth.getInstance().signOut();
+
+                Intent intent = new Intent(HomeActivity.this , MainActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(intent);
+                finish();
+
+            }
+        });
+        AlertDialog dialog = builder.create();
+        dialog.show();
+
+    }
+
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.home, menu);
+
         return true;
     }
 
