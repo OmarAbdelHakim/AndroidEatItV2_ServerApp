@@ -9,6 +9,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.bumptech.glide.Glide;
+import com.example.androideatitv2_serverapp.Model.CartItem;
 import com.example.androideatitv2_serverapp.Model.OrderModel;
 import com.example.androideatitv2_serverapp.R;
 import com.example.androideatitv2_serverapp.common.common;
@@ -27,9 +28,10 @@ public class MyOrderAdapter extends RecyclerView.Adapter<MyOrderAdapter.MyViewHo
 
     Context context;
     List<OrderModel> orderModelList;
+
     SimpleDateFormat simpleDateFormat;
 
-    public MyOrderAdapter(Context context, List<OrderModel> orderModelList) {
+    public MyOrderAdapter(Context context, List<OrderModel> orderModelList ) {
         this.context = context;
         this.orderModelList = orderModelList;
         simpleDateFormat = new SimpleDateFormat("dd-MM-yyyy HH:mm:ss");
@@ -62,7 +64,8 @@ public class MyOrderAdapter extends RecyclerView.Adapter<MyOrderAdapter.MyViewHo
                 String.valueOf(orderModelList.get(position).getCartItemList().size()),
                 holder.txt_num_item, Color.parseColor("#4B647D"));
 
-
+            common.setSpanStringColor("Quantity: " , String.valueOf(orderModelList.get(position).getCartItemList().get(0).getFoodQuantity()),
+                    holder.txt_food_quatity,Color.parseColor("#00574B"));
     }
 
     @Override
@@ -97,6 +100,9 @@ public class MyOrderAdapter extends RecyclerView.Adapter<MyOrderAdapter.MyViewHo
 
         @BindView(R.id.txt_num_item)
         TextView txt_num_item;
+
+        @BindView(R.id.txt_food_quatity)
+        TextView txt_food_quatity;
 
         private Unbinder unbinder;
         public MyViewHolder(@NonNull View itemView) {

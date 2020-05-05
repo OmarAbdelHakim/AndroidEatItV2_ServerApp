@@ -29,6 +29,8 @@
     import com.google.firebase.database.DatabaseReference;
     import com.google.firebase.database.FirebaseDatabase;
     import com.google.firebase.database.ValueEventListener;
+    import com.google.firebase.iid.FirebaseInstanceId;
+    import com.google.firebase.iid.InstanceIdResult;
 
     import java.util.Arrays;
     import java.util.List;
@@ -203,10 +205,30 @@
 
         private void GotoHomeActivity(ServerUserModel serverUserModel) {
 
-            dialog.dismiss();
-            common.currentServerUser = serverUserModel;
-            startActivity(new Intent(this , HomeActivity.class));
-            finish();
+            FirebaseInstanceId.getInstance()
+                    .getInstanceId()
+                    .addOnFailureListener(new OnFailureListener() {
+                        @Override
+                        public void onFailure(@NonNull Exception e) {
+                            Toast.makeText(MainActivity.this, ""+e.getMessage(), Toast.LENGTH_SHORT).show();
+                            dialog.dismiss();
+                            common.currentServerUser = serverUserModel;
+                            startActivity(new Intent(MainActivity.this , HomeActivity.class));
+                            finish();
+                        }
+                    }).addOnCompleteListener(new OnCompleteListener<InstanceIdResult>() {
+                @Override
+                public void onComplete(@NonNull Task<InstanceIdResult> task) {
+                    dialog.dismiss();
+                    common.currentServerUser = serverUserModel;
+                    //this what i talk about (Update Token)
+                    common.UpdateToken(MainActivity.this, task.getResult().getToken());
+                    startActivity(new Intent(MainActivity.this , HomeActivity.class));
+                    finish();
+                }
+            });
+
+
         }
 
         private void PhoneLogin() {

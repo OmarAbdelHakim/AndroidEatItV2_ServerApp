@@ -4,9 +4,13 @@ import android.Manifest;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.TokenWatcher;
+import android.text.TextUtils;
 import android.util.DisplayMetrics;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -16,12 +20,15 @@ import android.view.ViewGroup;
 import android.view.animation.AnimationUtils;
 import android.view.animation.LayoutAnimationController;
 import android.widget.Button;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.view.GravityCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProviders;
@@ -30,22 +37,37 @@ import androidx.recyclerview.widget.RecyclerView;
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import butterknife.Unbinder;
+import dmax.dialog.SpotsDialog;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.CompositeDisposable;
+import io.reactivex.functions.Consumer;
+import io.reactivex.internal.operators.observable.ObservableBuffer;
+import io.reactivex.schedulers.Schedulers;
 
 import com.example.androideatitv2_serverapp.Model.EventBus.AddonSizeEditEvent;
 import com.example.androideatitv2_serverapp.Model.EventBus.ChangeMenuClick;
 import com.example.androideatitv2_serverapp.Model.EventBus.LoadOrderEvent;
+import com.example.androideatitv2_serverapp.Model.EventBus.ToastEvent;
+import com.example.androideatitv2_serverapp.Model.FCMSendData;
+import com.example.androideatitv2_serverapp.Model.FCMresponse;
 import com.example.androideatitv2_serverapp.Model.FoodModel;
 import com.example.androideatitv2_serverapp.Model.OrderModel;
+import com.example.androideatitv2_serverapp.Model.TokenModel;
 import com.example.androideatitv2_serverapp.R;
 import com.example.androideatitv2_serverapp.SizeAddonEditActivity;
 import com.example.androideatitv2_serverapp.adapter.MyOrderAdapter;
 import com.example.androideatitv2_serverapp.common.BottomSheetOrderFragment;
 import com.example.androideatitv2_serverapp.common.MySwipeHelper;
 import com.example.androideatitv2_serverapp.common.common;
+import com.example.androideatitv2_serverapp.remote.IFCMService;
+import com.example.androideatitv2_serverapp.remote.RetrofitFCMClient;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.karumi.dexter.Dexter;
 import com.karumi.dexter.PermissionToken;
 import com.karumi.dexter.listener.PermissionDeniedResponse;
@@ -57,7 +79,9 @@ import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class OrderFragment extends Fragment {
 
@@ -72,6 +96,9 @@ public class OrderFragment extends Fragment {
 
     LayoutAnimationController layoutAnimationController;
     MyOrderAdapter adapter;
+
+    private CompositeDisposable compositeDisposable = new CompositeDisposable();
+    private IFCMService ifcmService;
 
 
     private OrderViewModel orderViewModel;
@@ -96,9 +123,7 @@ public class OrderFragment extends Fragment {
                     recycler_order.setAdapter(adapter);
                     recycler_order.setLayoutAnimation(layoutAnimationController);
 
-                    txt_order_filter.setText(new StringBuilder("Orders (")
-                    .append(orderModels.size())
-                    .append(")"));
+                    updateTextCounter();
 
                 }
             }
@@ -107,6 +132,9 @@ public class OrderFragment extends Fragment {
     }
 
     private void initView() {
+
+        ifcmService = RetrofitFCMClient.getInstance().create(IFCMService.class);
+
 
         setHasOptionsMenu(true);
 
@@ -189,9 +217,7 @@ public class OrderFragment extends Fragment {
                                             public void onSuccess(Void aVoid) {
                                                 adapter.removeItem(pos);
                                                 adapter.notifyItemRemoved(pos);
-                                                txt_order_filter.setText(new StringBuilder("Orders (")
-                                                .append(adapter.getItemCount())
-                                                .append(")"));
+                                                updateTextCounter();
                                                 dialogInterface.dismiss();
                                                 Toast.makeText(getContext(), "Order has been delete!", Toast.LENGTH_SHORT).show();
                                             }
@@ -214,13 +240,223 @@ public class OrderFragment extends Fragment {
                 buf.add(new MyButton(getContext(),"Edit",30 , 0, Color.parseColor("#336699"),
                         pos -> {
 
-                            // create a new activity to display them size and addon
+                                    showEditDialog(adapter.getItemAtPosition(pos) , pos);
 
 
                         }));
 
             }
         };
+    }
+
+    private void showEditDialog(OrderModel orderModel, int pos) {
+        View layout_dialog;
+        AlertDialog.Builder builder;
+        if(orderModel.getOrderStatus() == 0)
+        {
+            layout_dialog = LayoutInflater.from(getContext())
+                    .inflate(R.layout.layout_dialog_shipping,null);
+            builder = new AlertDialog.Builder(getContext() , android.R.style.Theme_Material_Light_NoActionBar_Fullscreen)
+            .setView(layout_dialog);
+
+        }
+        else if(orderModel.getOrderStatus() == -1) // Cancelled
+        {
+            layout_dialog = LayoutInflater.from(getContext())
+                    .inflate(R.layout.layout_dialog_canclled,null);
+            builder = new AlertDialog.Builder(getContext() )
+            .setView(layout_dialog);
+        }
+        else // Shipped
+        {
+            layout_dialog = LayoutInflater.from(getContext())
+                    .inflate(R.layout.layout_dialog_shipped,null);
+            builder = new AlertDialog.Builder(getContext() )
+            .setView(layout_dialog);
+        }
+
+        // View
+        Button btn_ok = (Button)layout_dialog.findViewById(R.id.btn_ok);
+        Button btn_cancel = (Button)layout_dialog.findViewById(R.id.btn_cancel);
+
+        RadioButton rdi_shipping = (RadioButton)layout_dialog.findViewById(R.id.rdi_shipping);
+        RadioButton rdi_shipped = (RadioButton)layout_dialog.findViewById(R.id.rdi_shipped);
+        RadioButton rdi_cancelled = (RadioButton)layout_dialog.findViewById(R.id.rdi_cancelled);
+        RadioButton rdi_delete = (RadioButton)layout_dialog.findViewById(R.id.rdi_delete);
+        RadioButton rdi_restore_placed = (RadioButton)layout_dialog.findViewById(R.id.rdi_restore_placed);
+
+        TextView txt_status = (TextView)layout_dialog.findViewById(R.id.txt_status);
+
+        //set Data
+
+        txt_status.setText(new StringBuilder("Order Status (")
+        .append(common.convertStatusToString(orderModel.getOrderStatus()))
+        .append(")"));
+
+        //Create Dialog
+        AlertDialog dialog = builder.create();
+        dialog.show();
+        //custom dialog
+        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        dialog.getWindow().setGravity(Gravity.CENTER);
+
+        btn_cancel.setOnClickListener(v -> dialog.dismiss());
+        btn_ok.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+                if(rdi_cancelled != null && rdi_cancelled.isChecked())
+                    updateOrder(pos,orderModel,-1);
+
+                else if(rdi_shipping != null && rdi_shipping.isChecked())
+                    updateOrder(pos,orderModel, 1);
+
+                else if(rdi_shipped != null && rdi_shipped.isChecked())
+                    updateOrder(pos,orderModel, 2);
+
+                else if(rdi_restore_placed != null && rdi_restore_placed.isChecked())
+                    updateOrder(pos,orderModel, 0);
+
+                else if(rdi_delete != null && rdi_delete.isChecked())
+                    deleteOrder(pos,orderModel);
+            }
+        });
+
+
+
+
+    }
+
+    private void deleteOrder(int pos, OrderModel orderModel) {
+        if(!TextUtils.isEmpty(orderModel.getKey()))
+        {
+
+
+            FirebaseDatabase.getInstance()
+                    .getReference(common.ORDER_REF)
+                    .child(orderModel.getKey())
+                    .removeValue()
+                    .addOnFailureListener(new OnFailureListener() {
+                        @Override
+                        public void onFailure(@NonNull Exception e) {
+                            Toast.makeText(getContext(), ""+e.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    }).addOnSuccessListener(new OnSuccessListener<Void>() {
+                @Override
+                public void onSuccess(Void aVoid) {
+                    adapter.removeItem(pos);
+                    adapter.notifyItemRemoved(pos);
+                    updateTextCounter();
+                    Toast.makeText(getContext(), " Delete order success! ", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+        else
+        {
+            Toast.makeText(getContext(), "Order number must not be null or empty!", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void updateOrder(int pos ,OrderModel orderModel , int status)
+    {
+        if(!TextUtils.isEmpty(orderModel.getKey()))
+        {
+            Map<String,Object> updateData = new HashMap<>();
+            updateData.put("orderStatus",status);
+
+            FirebaseDatabase.getInstance()
+                    .getReference(common.ORDER_REF)
+                    .child(orderModel.getKey())
+                    .updateChildren(updateData)
+                    .addOnFailureListener(new OnFailureListener() {
+                        @Override
+                        public void onFailure(@NonNull Exception e) {
+                            Toast.makeText(getContext(), ""+e.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    }).addOnSuccessListener(new OnSuccessListener<Void>() {
+                @Override
+                public void onSuccess(Void aVoid) {
+
+
+                    //Show Dilaog
+                    android.app.AlertDialog dialog = new SpotsDialog.Builder().setContext(getContext()).setCancelable(false).build();
+                    dialog.show();
+
+                    //First get token from user
+                    FirebaseDatabase.getInstance()
+                            .getReference(common.TOKEN_REF)
+                            .child(orderModel.getUserId())
+                            .addListenerForSingleValueEvent(new ValueEventListener() {
+                                @Override
+                                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+
+                                    if(dataSnapshot.exists())
+                                    {
+                                        TokenModel tokenModel = dataSnapshot.getValue(TokenModel.class);
+                                        Map<String,String> notiData = new HashMap<>();
+                                        notiData.put(common.NOTI_TITLE , "Your Order was update");
+                                        notiData.put(common.NOTI_CONTENT , new StringBuilder("Your order")
+                                        .append(orderModel.getKey())
+                                        .append("was update to")
+                                        .append(common.convertStatusToString(status)).toString());
+
+                                        FCMSendData sendData = new FCMSendData(tokenModel.getToken(),notiData);
+
+                                        compositeDisposable.add(ifcmService.sendNotification(sendData)
+                                        .subscribeOn(Schedulers.io())
+                                        .observeOn(AndroidSchedulers.mainThread())
+                                        .subscribe(fcMresponse -> {
+                                                dialog.dismiss();
+                                            if(fcMresponse.getSuccess() == 1)
+                                            {
+                                                Toast.makeText(getContext(), " Update order success! ", Toast.LENGTH_SHORT).show();
+                                            }
+                                            else
+                                            {
+                                                Toast.makeText(getContext(), " Update order success but failed to send notification! ", Toast.LENGTH_SHORT).show();
+                                            }
+                                                
+                                        }, throwable -> {
+                                            dialog.dismiss();
+                                            Toast.makeText(getContext(), ""+throwable.getMessage(), Toast.LENGTH_SHORT).show();
+                                        }));
+
+                                    }
+                                    else
+                                    {
+                                        dialog.dismiss();
+                                        Toast.makeText(getContext(), "Token not found", Toast.LENGTH_SHORT).show();
+                                    }
+                                }
+
+                                @Override
+                                public void onCancelled(@NonNull DatabaseError databaseError) {
+                                    dialog.dismiss();
+                                    Toast.makeText(getContext(), ""+databaseError.getMessage(), Toast.LENGTH_SHORT).show();
+                                }
+                            });
+
+
+
+
+
+                    adapter.removeItem(pos);
+                    adapter.notifyItemRemoved(pos);
+                    updateTextCounter();
+
+                }
+            });
+        }
+        else
+        {
+            Toast.makeText(getContext(), "Order number must not be null or empty!", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void updateTextCounter() {
+        txt_order_filter.setText(new StringBuilder("Orders (")
+                .append(adapter.getItemCount())
+                .append(")"));
     }
 
     @Override
@@ -231,15 +467,15 @@ public class OrderFragment extends Fragment {
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
 
-        switch (item.getItemId())
+        if(item.getItemId() == R.id.action_filter)
         {
-            case R.id.action_filter:
-                BottomSheetOrderFragment bottomSheetOrderFragment = BottomSheetOrderFragment.getInstance();
-                bottomSheetOrderFragment.show(getActivity().getSupportFragmentManager(),"OrderFilter");
-                break;
+            BottomSheetOrderFragment bottomSheetOrderFragment = BottomSheetOrderFragment.getInstance();
+            bottomSheetOrderFragment.show(getActivity().getSupportFragmentManager(),"OrderFilter");
+            return true;
         }
 
-        return true;
+        else
+            return super.onOptionsItemSelected(item);
     }
 
     @Override
@@ -255,6 +491,8 @@ public class OrderFragment extends Fragment {
             EventBus.getDefault().removeStickyEvent(LoadOrderEvent.class);
         if(EventBus.getDefault().isRegistered(this))
             EventBus.getDefault().unregister(this);
+
+        compositeDisposable.clear();
         super.onStop();
     }
 

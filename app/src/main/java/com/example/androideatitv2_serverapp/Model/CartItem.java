@@ -1,9 +1,5 @@
 package com.example.androideatitv2_serverapp.Model;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.room.ColumnInfo;
-
 public class CartItem {
 
 
@@ -69,13 +65,9 @@ public class CartItem {
         this.foodPrice = foodPrice;
     }
 
-    public int getFoodQuantity() {
-        return foodQuantity;
-    }
 
-    public void setFoodQuantity(int foodQuantity) {
-        this.foodQuantity = foodQuantity;
-    }
+
+
 
     public String getUserPhone() {
         return userPhone;
@@ -117,6 +109,12 @@ public class CartItem {
         this.uid = uid;
     }
 
+    public int getFoodQuantity() {
+        return foodQuantity;
+    }
 
+    public void setFoodQuantity(int foodQuantity) {
+        this.foodQuantity = foodQuantity;
+    }
 }
 
